@@ -1,194 +1,381 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>Visor 3D · Rendik</title>
-  <style>
-    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2d; --line:#26334e; --text:#eef3ff; --muted:#aab6d0; --accent:#62e6c6; }
-    * { box-sizing:border-box; }
-    html,body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    .wrap { width:min(1120px,100%); margin:auto; padding:clamp(12px,3vw,28px); }
-    header { display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:16px; }
-    h1 { font-size:clamp(1.25rem,3vw,2rem); margin:0; letter-spacing:-.03em; }
-    .eyebrow { color:var(--accent); text-transform:uppercase; letter-spacing:.13em; font-size:.75rem; font-weight:700; margin:0 0 5px; }
-    .layout { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:14px; }
-    .stage,.side { border:1px solid var(--line); background:var(--panel); border-radius:18px; overflow:hidden; }
-    .stage { min-height:420px; position:relative; }
-    #viewer { display:block; width:100%; height: min(68vh,680px); min-height:420px; touch-action:none; outline:none; }
-    .status { position:absolute; left:14px; bottom:12px; max-width:calc(100% - 28px); padding:8px 11px; border-radius:10px; background:#080d19d9; color:var(--muted); font-size:.85rem; pointer-events:none; }
-    .side { padding:18px; }
-    .side h2 { font-size:1rem; margin:0 0 12px; }
-    .controls { display:grid; gap:9px; }
-    button { appearance:none; border:1px solid #354563; border-radius:11px; padding:11px 13px; background:#19243a; color:var(--text); font:inherit; font-weight:650; cursor:pointer; text-align:left; }
-    button:hover { border-color:var(--accent); }
-    button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-    button.primary { background:var(--accent); color:#07131a; border-color:var(--accent); text-align:center; }
-    .hint { color:var(--muted); font-size:.88rem; margin:15px 0 0; }
-    .footer { color:var(--muted); font-size:.8rem; margin:12px 2px 0; }
-    code { color:var(--accent); }
-    @media (max-width:760px) { .layout { grid-template-columns:1fr; } .stage,#viewer { min-height:340px; } #viewer { height:55vh; } .side { padding:14px; } .controls { grid-template-columns:repeat(2,minmax(0,1fr)); } button.primary { grid-column:1/-1; } }
-    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; } }
-  </style>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-      }
-    }
-  </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c0e15">
+<title>Rendik3D | Configurador de ordenadores</title>
+<meta name="description" content="Explora los equipos Rendik3D, sus componentes y monitores en 3D.">
 </head>
-<body>
-  <main class="wrap">
-    <header>
-      <div>
-        <p class="eyebrow">Rendik · Experiencia interactiva</p>
-        <h1>Explora el modelo en 3D</h1>
-      </div>
-    </header>
-    <section class="layout" aria-label="Visor de modelo 3D">
-      <div class="stage">
-        <canvas id="viewer" aria-label="Modelo 3D interactivo"></canvas>
-        <div id="status" class="status" role="status">Cargando visor…</div>
-      </div>
-      <aside class="side">
-        <h2>Controles</h2>
-        <div class="controls">
-          <button class="primary" id="reset">Restablecer vista</button>
-          <button id="rotate" aria-pressed="true">Giro automático: sí</button>
-          <button id="wire">Alternar alámbrico</button>
-        </div>
-        <p class="hint">Ratón: arrastra para girar y usa la rueda para acercar o alejar. En móvil, usa un dedo para girar y pellizca para zoom.</p>
-        <p class="hint">El modelo se carga desde <code>models/model.glb</code>. Sustituye ese archivo por tu modelo.</p>
-      </aside>
-    </section>
-    <p class="footer">Si no aparece el modelo, comprueba la ruta del archivo y que el GLB/GLTF no dependa de texturas externas ausentes.</p>
-  </main>
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-    const canvas = document.querySelector('#viewer');
-    const status = document.querySelector('#status');
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0b1020');
-
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 1000);
-    camera.position.set(3.2, 2.2, 4.2);
-
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x35405b, 2.0));
-    const key = new THREE.DirectionalLight(0xffffff, 3.0);
-    key.position.set(4, 7, 5);
-    scene.add(key);
-    const fill = new THREE.DirectionalLight(0x7bbcff, 1.2);
-    fill.position.set(-5, 2, -4);
-    scene.add(fill);
-
-    const grid = new THREE.GridHelper(10, 20, 0x33415e, 0x1b2740);
-    grid.position.y = -1;
-    scene.add(grid);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.07;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.0;
-    controls.minDistance = 0.05;
-    controls.maxDistance = 100;
-    controls.target.set(0, 0, 0);
-
-    let model = null;
-    let wireframe = false;
-    const originalMaterials = [];
-
-    function frameModel(object) {
-      const box = new THREE.Box3().setFromObject(object);
-      if (box.isEmpty()) return;
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      object.position.sub(center);
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const fov = THREE.MathUtils.degToRad(camera.fov);
-      let distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.55;
-      distance = Math.max(distance, 0.5);
-      camera.position.set(distance * 0.85, distance * 0.55, distance);
-      camera.near = Math.max(maxDim / 1000, 0.001);
-      camera.far = Math.max(maxDim * 100, 100);
-      camera.updateProjectionMatrix();
-      controls.target.set(0, 0, 0);
-      controls.minDistance = Math.max(maxDim * 0.08, 0.02);
-      controls.maxDistance = maxDim * 12;
-      controls.update();
-      grid.position.y = -size.y / 2;
-      grid.scale.setScalar(Math.max(maxDim / 10, 0.1));
-    }
-
-    function resize() {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      if (!w || !h) return;
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
-    new ResizeObserver(resize).observe(canvas);
-    window.addEventListener('resize', resize);
-    resize();
-
-    document.querySelector('#reset').addEventListener('click', () => {
-      if (model) frameModel(model);
-      controls.autoRotate = true;
-      document.querySelector('#rotate').textContent = 'Giro automático: sí';
-      document.querySelector('#rotate').setAttribute('aria-pressed', 'true');
-    });
-    document.querySelector('#rotate').addEventListener('click', (event) => {
-      controls.autoRotate = !controls.autoRotate;
-      event.currentTarget.textContent = `Giro automático: ${controls.autoRotate ? 'sí' : 'no'}`;
-      event.currentTarget.setAttribute('aria-pressed', String(controls.autoRotate));
-    });
-    document.querySelector('#wire').addEventListener('click', () => {
-      if (!model) return;
-      wireframe = !wireframe;
-      model.traverse((obj) => {
-        if (!obj.isMesh) return;
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach((mat) => { if (mat && 'wireframe' in mat) mat.wireframe = wireframe; });
-      });
-      document.querySelector('#wire').textContent = wireframe ? 'Vista normal' : 'Alternar alámbrico';
-    });
-
-    const modelUrl = new URL('./models/model.glb', import.meta.url);
-    new GLTFLoader().load(
-      modelUrl.href,
-      (gltf) => {
-        model = gltf.scene;
-        scene.add(model);
-        frameModel(model);
-        status.textContent = 'Modelo cargado · arrastra para girar';
-        setTimeout(() => { status.hidden = true; }, 4500);
-      },
-      (event) => {
-        if (event.total) status.textContent = `Cargando modelo… ${Math.round(event.loaded / event.total * 100)}%`;
-      },
-      (error) => {
-        console.error('No se pudo cargar el modelo 3D:', error);
-        status.textContent = 'No se ha encontrado models/model.glb. Sube tu modelo GLB con ese nombre.';
-      }
-    );
-
-    renderer.setAnimationLoop(() => {
-      controls.update();
-      renderer.render(scene, camera);
-    });
-  </script>
+<body style="margin:0;background:#0c0e15;">
+<div id="rk">
+<style>
+#rk{--a:#5b8cff;--bg:#0c0e15;--s:#141824;--br:#262c40;--tx:#eceff8;--mu:#8f98b5;font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx);background:var(--bg);border-radius:20px;padding:clamp(16px,3vw,34px);max-width:1180px;margin:0 auto}
+#rk *{box-sizing:border-box}
+#rk h2,#rk h3,#rk p{margin:0;padding:0;color:inherit}
+#rk h2{font-size:clamp(1.6rem,3.4vw,2.3rem);font-weight:700;letter-spacing:-.02em;color:#fff}
+#rk h3.sec{font-size:1.5rem;color:#fff;margin-top:44px;letter-spacing:-.01em}
+#rk .sub{color:var(--mu);margin-top:6px;max-width:62ch}
+#rk a{color:var(--a)}
+#rk .flt{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:24px 0 14px}
+#rk .flt label{display:grid;gap:4px;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mu)}
+#rk select{font:inherit;font-size:.95rem;color:var(--tx);background:var(--s);border:1px solid var(--br);border-radius:10px;padding:9px 12px;min-width:210px}
+#rk .cnt{margin-left:auto;color:var(--mu);font-size:.85rem}
+#rk .mods,#rk .pills{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+#rk button{font:inherit;cursor:pointer;color:var(--mu);background:none;border:1px solid var(--br);border-radius:999px;padding:8px 15px;font-size:.88rem;white-space:nowrap;transition:.15s}
+#rk button:hover{color:var(--tx);border-color:#3a4260}
+#rk button.on{color:#fff;background:#1f2742;background:color-mix(in srgb,var(--a) 22%,transparent);border-color:var(--a)}
+#rk .grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;margin-top:14px;align-items:start}
+#rk .card{background:var(--s);border:1px solid var(--br);border-radius:18px;overflow:hidden}
+#rk .view{position:relative;background:radial-gradient(ellipse at 50% 30%,#1d2440,#0c0e15 72%)}
+#rk canvas{display:block;width:100%;height:520px;touch-action:pan-y;cursor:grab}
+#rk .gal canvas{height:400px}
+#rk .hint{position:absolute;left:16px;bottom:12px;font-style:normal;font-size:.76rem;color:var(--mu);pointer-events:none;transition:opacity .5s}
+#rk .tb{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;padding:10px 12px;border-top:1px solid var(--br)}
+#rk .seg{display:inline-flex;gap:2px;max-width:100%;overflow-x:auto}
+#rk .seg button{border-color:transparent;padding:6px 12px;font-size:.84rem}
+#rk .seg button.on{border-color:var(--a)}
+#rk .pn{padding:22px}
+#rk .pn h3{font-size:1.4rem;color:#fff;letter-spacing:-.01em;margin-top:6px}
+#rk .tg{font-size:.76rem;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
+#rk .pr{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin:6px 0 8px}
+#rk .pr b{font-size:1.9rem;color:#fff;letter-spacing:-.02em}
+#rk .pr span{font-size:.8rem;color:var(--mu)}
+#rk .id{color:var(--mu);font-size:.93rem;margin-bottom:14px}
+#rk .r{border-top:1px solid var(--br)}
+#rk .rh{display:grid;grid-template-columns:54px 1fr auto 16px;gap:10px;align-items:center;padding:12px 2px;cursor:pointer}
+#rk .rh::after{content:"+";color:var(--mu);text-align:center}
+#rk .r.o .rh::after{content:"–"}
+#rk .k{font-size:.68rem;font-weight:700;letter-spacing:.06em;color:var(--a);text-transform:uppercase}
+#rk .rn{min-width:0;font-size:.93rem;line-height:1.3}
+#rk .rp{color:var(--mu);font-size:.85rem}
+#rk .rb{display:none;padding:0 2px 16px 64px;font-size:.9rem}
+#rk .r.o .rb{display:block}
+#rk .rb p+p,#rk .gd p+p{margin-top:10px}
+#rk .rb p b,#rk .gd p b{display:block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--a);margin-bottom:1px}
+#rk .rb p.t,#rk .gd p.t{color:var(--mu);font-size:.85rem}
+#rk .gd{margin-top:14px;font-size:.95rem}
+#rk .wr{flex-wrap:wrap;overflow:visible}
+#rk .bd{font-style:normal;font-size:.68rem;color:var(--a);border:1px solid var(--a);border-radius:999px;padding:0 7px;margin-left:8px}
+@media(max-width:820px){#rk .grid{grid-template-columns:1fr}#rk canvas{height:380px}#rk .rb{padding-left:2px}#rk select{min-width:150px}#rk .cnt{margin-left:0;width:100%}}
+</style>
+<h2>Nuestros productos</h2>
+<p class="sub">Ordenadores Plug &amp; Play montados a tu medida. Elige para qué lo quieres y cuánto quieres invertir, gira el equipo y descubre qué lleva dentro.</p>
+<div class="flt"><label>Uso<select id="rk-u"></select></label><label>Presupuesto<select id="rk-b"></select></label><span class="cnt" id="rk-n"></span></div>
+<div class="mods" id="rk-m"></div>
+<div class="grid">
+<div class="card"><div class="view"><canvas id="rk-c1"></canvas><i class="hint" id="rk-h">Arrastra para girar · rueda para acercar</i></div>
+<div class="tb"><div class="seg" id="rk-v"></div><div class="seg" id="rk-t"></div></div></div>
+<div class="card pn" id="rk-i"></div>
+</div>
+<h3 class="sec">Tu equipo completo: PC + monitor</h3>
+<p class="sub">Así se ve sobre tu mesa, encendido y apagado. La pantalla muestra lo que harás con él según el tipo de equipo.</p>
+<div class="grid">
+<div class="card"><div class="view"><canvas id="rk-c3"></canvas></div><div class="tb"><div class="seg" id="rk-pw"><button data-p="1" class="on">Encendido</button><button data-p="0">Apagado</button></div><div class="seg" id="rk-v3"></div></div></div>
+<div class="card pn" id="rk-ci"></div>
+</div>
+<h3 class="sec">Piezas y monitores en 3D</h3>
+<p class="sub">Elige un tipo de pieza o un monitor: lo verás en 3D y te lo explicamos en sencillo y con su ficha técnica.</p>
+<div class="seg" id="rk-gc" style="margin-top:14px"></div>
+<div class="pills" id="rk-gp" style="margin-top:8px"></div>
+<div class="grid gal">
+<div class="card"><div class="view"><canvas id="rk-c2"></canvas></div></div>
+<div class="card pn" id="rk-gi"></div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+var root=document.getElementById('rk');
+if(!window.THREE){root.insertAdjacentHTML('beforeend','<p class="sub">No se pudo cargar el visor 3D.</p>');return}
+const T=THREE,PI=Math.PI,q=s=>root.querySelector(s),V3=(x,y,z)=>new T.Vector3(x,y,z);
+/* ================= ZONA EDITABLE ================= */
+const CONTACT='/donde-puedes-localizarnos/';
+const U={of:'Ofimática / Trabajo',ga:'Gaming & Streaming',di:'Diseño & Edición',ar:'Arquitectura & 3D'};
+const B=['Hasta 700 €','700 € – 1.200 €','1.200 € – 2.000 €','+ 2.000 €'];
+const SZ={micro:[.8,1.5,1.5],mid:[.96,1.85,1.85],big:[1.04,2.05,2.05]};
+/* Catálogo de piezas: id:[tipo, nombre, precio, ficha técnica, explicación sencilla, visual]. Cambia nombres y precios por los reales. */
+const A={
+c3:['cpu','Intel Core i3-12100',110,'4 núcleos / 8 hilos, hasta 4,3 GHz, 12 MB de caché, gráficos UHD 730 integrados, 60 W.','Lo justo para ofimática, navegar y videollamadas con fluidez. Con Excel muy pesado o muchas pestañas puede quedarse corto.',{l:'Core i3'}],
+c5:['cpu','Intel Core i5-14400',200,'10 núcleos (6P+4E) / 16 hilos, hasta 4,7 GHz, 20 MB de caché, gráficos UHD 730.','El punto medio ideal: vas sobrado en ofimática, con muchas pestañas, varias pantallas y programas abiertos a la vez.',{l:'Core i5'}],
+c7:['cpu','Intel Core i7-14700',330,'20 núcleos (8P+12E) / 28 hilos, hasta 5,4 GHz, 33 MB de caché, gráficos UHD 770.','Potencia de sobra para archivos enormes, varias pantallas y programas pesados sin esperas.',{l:'Core i7'}],
+r5g:['cpu','AMD Ryzen 5 5600G',140,'6 núcleos / 12 hilos, hasta 4,4 GHz, 16 MB de caché y gráficos Radeon integrados.','Trae vídeo propio: no necesitas tarjeta gráfica para trabajar, ver series o jugar a títulos ligeros.',{l:'Ryzen 5'}],
+r5:['cpu','AMD Ryzen 5 7500F',170,'6 núcleos / 12 hilos, hasta 5,0 GHz, 32 MB de caché. Sin gráficos integrados.','Muy rápido para jugar y eficiente. Necesita tarjeta gráfica porque no incluye vídeo propio.',{l:'Ryzen 5'}],
+r7:['cpu','AMD Ryzen 7 7800X3D',380,'8 núcleos / 16 hilos, hasta 5,0 GHz, 96 MB de caché con 3D V-Cache.','El rey de los juegos: su caché extra da más imágenes por segundo y más fluidez.',{l:'Ryzen 7 X3D'}],
+r9:['cpu','AMD Ryzen 9 9900X',380,'12 núcleos / 24 hilos, hasta 5,6 GHz, 64 MB de caché.','Muchos núcleos para renderizar y exportar vídeo en menos tiempo con programas profesionales.',{l:'Ryzen 9'}],
+u7:['cpu','Intel Core Ultra 7 265K',380,'20 núcleos (8P+12E), hasta 5,5 GHz, 30 MB de caché, NPU para IA.','Muy ágil en CAD, modelado y renders; rinde de maravilla en programas de arquitectura y diseño.',{l:'Core Ultra 7'}],
+r9x3d:['cpu','AMD Ryzen 9 9950X3D',650,'16 núcleos / 32 hilos, hasta 5,7 GHz, 128 MB de caché L3 (3D V-Cache).','Lo mejor para jugar y trabajar a la vez: juegos, streaming y edición sin sacrificar nada.',{l:'Ryzen 9 X3D'}],
+r9b:['cpu','AMD Ryzen 9 9950X',520,'16 núcleos / 32 hilos, hasta 5,7 GHz, 64 MB de caché.','Máxima potencia para renders largos, simulaciones y trabajo profesional continuo.',{l:'Ryzen 9'}],
+h610:['mb','Placa H610M DDR4',70,'Socket LGA1700, chipset H610, DDR4, 1 ranura M.2, formato micro-ATX.','Básica y económica, perfecta para un equipo de oficina sin complicaciones.',{}],
+b550m:['mb','Placa B550M micro-ATX',80,'Socket AM4, chipset B550, DDR4, PCIe 4.0 x16, 1 M.2, micro-ATX.','Compacta y fiable; cubre lo necesario y admite una gráfica si más adelante la quieres.',{}],
+b760m:['mb','Placa B760M DDR5',110,'LGA1700, chipset B760, DDR5, PCIe 4.0 x16, 2 M.2.','Equilibrada: memoria más rápida y sitio para ampliar discos en el futuro.',{}],
+b650m:['mb','Placa B650M DDR5',120,'Socket AM5, chipset B650, DDR5, PCIe x16, 2 M.2, micro-ATX.','Plataforma moderna y duradera: podrás cambiar a un procesador mejor sin cambiar de placa.',{}],
+b650:['mb','Placa B650 ATX DDR5',170,'AM5, B650, formato ATX, VRM reforzado, 3 M.2 y más ranuras PCIe.','Más grande y robusta: aguanta procesadores potentes y deja mucho margen para ampliar.',{}],
+x870:['mb','Placa X870 ATX DDR5',300,'AM5, X870, USB4, PCIe 5.0 para gráfica y SSD, VRM de gama alta.','Gama alta con lo último en velocidad, preparada para durar años.',{}],
+z890:['mb','Placa Z890 ATX DDR5',230,'LGA1851, Z890, DDR5, PCIe 5.0, Thunderbolt 4 según modelo.','Pensada para procesadores Intel de gama alta y conexiones muy rápidas.',{}],
+x870e:['mb','Placa X870E ATX DDR5',330,'AM5, X870E, USB4, doble PCIe 5.0 x16, VRM premium.','La más completa para estaciones de trabajo: máxima conectividad y estabilidad.',{}],
+r16d4:['ram','16 GB DDR4 3200 MHz (2×8)',45,'2×8 GB en doble canal, DDR4 3200 MHz, latencia CL16.','Basta para navegador, Office y videollamadas a la vez sin ir lento.',{c:0x4f8cff}],
+r16d5:['ram','16 GB DDR5 6000 MHz (2×8)',70,'2×8 GB en doble canal, DDR5 6000 MHz, perfil EXPO/XMP.','Memoria rápida y el mínimo recomendable hoy para jugar con soltura.',{c:0xf43f5e}],
+r32:['ram','32 GB DDR5 6000 MHz (2×16)',100,'2×16 GB en doble canal, DDR5 6000 MHz, perfil EXPO/XMP.','Mucho margen: juegos, streaming y programas abiertos a la vez sin agobios.',{c:0xa855f7}],
+r64:['ram','64 GB DDR5 6000 MHz (2×32)',210,'2×32 GB en doble canal, DDR5 6000 MHz.','Para proyectos grandes: vídeo 4K, escenas 3D y muchos archivos pesados abiertos.',{c:0x22d3ee}],
+r128:['ram','128 GB DDR5 5600 MHz (4×32)',400,'4×32 GB, DDR5 5600 MHz, para cargas profesionales.','Pensada para modelos y escenas enormes; casi nunca te quedarás corto.',{c:0xfacc15,n:4}],
+s1:['ssd','SSD NVMe PCIe 4.0 1 TB',65,'M.2 NVMe PCIe 4.0 x4, hasta ≈5.000 MB/s de lectura.','Arranca en segundos y deja espacio de sobra para tus documentos y programas.',{l:'1 TB'}],
+s2:['ssd','SSD NVMe PCIe 4.0 2 TB',120,'M.2 NVMe PCIe 4.0 x4, hasta ≈7.000 MB/s de lectura.','El doble de espacio: ideal para proyectos, fotos y vídeo sin quedarte sin sitio.',{l:'2 TB'}],
+s2g5:['ssd','SSD NVMe PCIe 5.0 2 TB',150,'M.2 NVMe PCIe 5.0 x4, hasta ≈12.000 MB/s de lectura.','Lo más rápido del mercado: mueve archivos enormes casi al instante.',{l:'2 TB GEN5'}],
+s4:['ssd','SSD NVMe PCIe 4.0 4 TB',280,'M.2 NVMe PCIe 4.0 x4, 4 TB, hasta ≈7.000 MB/s de lectura.','Capacidad de estudio profesional: guarda bibliotecas y proyectos enormes en un solo disco.',{l:'4 TB'}],
+g5060:['gpu','NVIDIA GeForce RTX 5060 · 8 GB',300,'8 GB GDDR7, bus de 128 bits, DLSS 4 y trazado de rayos.','Para jugar en Full HD con todo en alto y retransmitir con buena calidad.',{L:.96,c:0x34d399}],
+g5060ti:['gpu','NVIDIA GeForce RTX 5060 Ti · 16 GB',450,'16 GB GDDR7, bus de 128 bits, DLSS 4 y codificador de vídeo NVENC.','Más memoria de vídeo: perfecta para edición, 1440p y proyectos de diseño exigentes.',{L:1.05,c:0x22d3ee}],
+g5070ti:['gpu','NVIDIA GeForce RTX 5070 Ti · 16 GB',800,'16 GB GDDR7, bus de 256 bits, DLSS 4 y trazado de rayos de última generación.','Fluidez en 1440p y 4K y mucha capacidad para renders y modelado 3D.',{L:1.2,c:0xa855f7}],
+g5080:['gpu','NVIDIA GeForce RTX 5080 · 16 GB',1150,'16 GB GDDR7, bus de 256 bits, DLSS 4, gama alta.','Rendimiento de primer nivel en 4K, streaming y renders pesados.',{L:1.3,c:0xff8a1f}],
+p500:['psu','Fuente 500 W 80 PLUS Bronze',50,'500 W, 80 PLUS Bronze (≈85 % de eficiencia), protecciones OVP/OCP/SCP.','Energía de sobra para un equipo de oficina, sin pagar potencia que no vas a usar.',{l:'500 W BRONZE'}],
+p650:['psu','Fuente 650 W 80 PLUS Gold',75,'650 W, 80 PLUS Gold (≈90 % de eficiencia), ventilador de 120 mm.','Alimenta una gráfica de gama media y gasta menos electricidad.',{l:'650 W GOLD'}],
+p750:['psu','Fuente 750 W 80 PLUS Gold',100,'750 W, 80 PLUS Gold, conector de gráfica 12V-2x6.','Margen para una gráfica potente y para ampliar el equipo más adelante.',{l:'750 W GOLD'}],
+p850:['psu','Fuente 850 W 80 PLUS Gold',110,'850 W, 80 PLUS Gold, conector 12V-2x6 y cableado modular.','Estabilidad total en trabajos largos con procesador y gráfica exigentes.',{l:'850 W GOLD'}],
+p1000:['psu','Fuente 1000 W 80 PLUS Gold',170,'1000 W, 80 PLUS Gold, ATX 3.1, 12V-2x6 y cableado modular.','Sobrada para gama alta: silenciosa, eficiente y con margen para crecer.',{l:'1000 W GOLD'}],
+k0:['cool','Disipador de serie (incluido)',0,'Disipador de aluminio con ventilador PWM, incluido con el procesador.','Suficiente para el uso diario; no necesitas más para ofimática.',{n:6,f:1,s:.38}],
+ka:['cool','Disipador de aire de torre',35,'Torre con 4 heatpipes de cobre y ventilador de 120 mm.','Mantiene el procesador más fresco y silencioso que el de serie.',{n:10,f:1,s:.46}],
+kb:['cool','Disipador de aire de doble torre',55,'Doble torre con 6 heatpipes y doble ventilador de 120/140 mm.','Refrigera procesadores potentes con poco ruido, sin recurrir a líquido.',{n:14,f:2,s:.46}],
+kw:['cool','Refrigeración líquida 360 mm',140,'AIO con radiador de 360 mm, bomba en el bloque y 3 ventiladores de 120 mm.','Para procesadores de gran potencia: evacúa mucho calor con poco ruido y luce genial.',{aio:1,f:3}],
+cm:['case','Torre micro-ATX con 1 ventilador',50,'Chasis micro-ATX, 1 ventilador de 120 mm, filtro antipolvo y panel de cristal.','Compacta y sobria: cabe en cualquier escritorio y es fácil de mantener.',{z:'micro',f:1}],
+cmid:['case','Torre mid-tower con 2 ventiladores',70,'Chasis ATX, 2 ventiladores de 120 mm, filtros antipolvo y cristal templado.','Buena ventilación y espacio para ampliar piezas más adelante.',{z:'mid',f:2}],
+cmesh:['case','Torre con frontal de malla y 3 ventiladores',90,'Chasis ATX con frontal perforado, 3 ventiladores de 120 mm y cristal templado.','Máximo flujo de aire: todo se mantiene fresco aunque juegues o renderices durante horas.',{z:'mid',f:3,m:1}],
+cbig:['case','Torre grande con cristal templado',130,'Full-tower ATX con soporte para radiador de 360 mm y cristal templado.','Mucho espacio y aspecto premium; cabe cualquier pieza que quieras añadir.',{z:'big',f:3}],
+m24:['mon','Monitor 24″ Full HD 75 Hz',90,'24″, 1920×1080, IPS, 75 Hz, 5 ms, entradas HDMI y VGA.','Nítido y cómodo para trabajar horas; buenos colores y buenos ángulos de visión.',{d:24,ar:16/9}],
+m27:['mon','Monitor 27″ Full HD 100 Hz',130,'27″, 1920×1080, IPS, 100 Hz, HDMI y DisplayPort, antirreflejos.','Más espacio en pantalla para tener varias ventanas a la vista, con imagen suave al mover el ratón.',{d:27,ar:16/9}],
+m27q:['mon','Monitor 27″ QHD 165 Hz',260,'27″, 2560×1440, IPS, 165 Hz, 1 ms, FreeSync / G-Sync Compatible.','El punto dulce para jugar: más nítido que Full HD y muy fluido.',{d:27,ar:16/9}],
+m32:['mon','Monitor 32″ 4K UHD',340,'32″, 3840×2160, IPS, 60 Hz, 99 % sRGB, USB-C.','Muchísimo espacio de trabajo y detalle: ideal para planos, hojas grandes y varias ventanas.',{d:32,ar:16/9}],
+mcurv:['mon','Monitor curvo 34″ ultrapanorámico',380,'34″, 3440×1440, VA curvo 1000R, 165 Hz, formato 21:9.','Pantalla panorámica envolvente: inmersión total al jugar y espacio para muchas ventanas.',{d:34,ar:3440/1440,cv:1}],
+mcol:['mon','Monitor 27″ 4K para color profesional',520,'27″, 3840×2160, IPS, 100 % sRGB y 99 % Adobe RGB, calibrado de fábrica.','Colores fieles a la realidad: lo que ves en pantalla es lo que saldrá al imprimir o exportar.',{d:27,ar:16/9}],
+mg:['mon','Monitor gaming 27″ QHD 240 Hz OLED',650,'27″, 2560×1440, OLED, 240 Hz, 0,03 ms, HDR.','Negros perfectos y respuesta instantánea: la experiencia más fluida y espectacular.',{d:27,ar:16/9}]};
+/* Equipos: u=uso, b=tramo de presupuesto (0 a 3), p=lista de piezas del catálogo */
+const C=[
+{id:'of1',u:'of',b:0,n:'Oficina Esencial',col:0x4f8cff,ideal:'Word, Excel, correo, navegar y videollamadas en el día a día.',p:['c3','h610','r16d4','s1','k0','p500','cm']},
+{id:'of2',u:'of',b:0,n:'Oficina Plus',col:0x2dd4bf,ideal:'Trabajo con muchas pestañas, hojas de cálculo grandes y varias pantallas.',p:['c5','b760m','r16d5','s1','k0','p500','cmid']},
+{id:'of3',u:'of',b:1,n:'Oficina Pro',col:0x34d399,ideal:'Gestión pesada, archivos enormes y multitarea intensa o teletrabajo exigente.',p:['c7','b760m','r32','s2','ka','p650','cmid']},
+{id:'ga0',u:'ga',b:0,n:'Gaming Entrada',col:0xfb7185,ideal:'Estrenarte en el juego con títulos ligeros y e-sports; lista para añadir gráfica.',p:['r5g','b550m','r16d4','s1','ka','p650','cmid']},
+{id:'ga1',u:'ga',b:1,n:'Gaming Inicio',col:0xf43f5e,ideal:'Jugar en Full HD con todo en alto y empezar a retransmitir.',p:['r5','b650m','r16d5','s1','g5060','ka','p650','cmesh']},
+{id:'ga2',u:'ga',b:2,n:'Gaming Élite',col:0xa855f7,ideal:'Jugar en 1440p y 4K con muchas imágenes por segundo y streaming fluido.',p:['r7','b650','r32','s2','g5070ti','kb','p750','cmesh']},
+{id:'ga3',u:'ga',b:3,n:'Streaming Extremo',col:0xff8a1f,ideal:'Jugar en 4K, retransmitir y editar a la vez sin que nada se resienta.',p:['r9x3d','x870','r64','s2g5','g5080','kw','p1000','cbig']},
+{id:'di1',u:'di',b:2,n:'Diseño Foto & Vídeo',col:0x22d3ee,ideal:'Edición de foto y vídeo 4K con Photoshop, Premiere o DaVinci.',p:['r9','b650','r64','s2','g5060ti','kb','p750','cmid']},
+{id:'di2',u:'di',b:3,n:'Estudio Creativo Pro',col:0x38bdf8,ideal:'Vídeo 4K/8K, motion graphics y proyectos creativos de gran tamaño.',p:['r9b','x870','r64','s4','g5080','kw','p1000','cbig']},
+{id:'ar1',u:'ar',b:2,n:'Arquitectura & 3D',col:0xfacc15,ideal:'Revit, AutoCAD, SketchUp, modelado 3D y renders con motor de GPU.',p:['u7','z890','r64','s2','g5070ti','kb','p850','cmesh']},
+{id:'ar2',u:'ar',b:3,n:'Estación 3D Pro',col:0xa3e635,ideal:'Escenas muy complejas, renders largos, simulación y trabajo profesional continuo.',p:['r9b','x870e','r128','s4','g5080','kw','p1000','cbig']}];
+/* Monitor recomendado para cada equipo */
+const MON={of1:'m24',of2:'m27',of3:'m32',ga0:'m27',ga1:'m27q',ga2:'mcurv',ga3:'mg',di1:'mcol',di2:'mcol',ar1:'m32',ar2:'m32'};
+/* ================= FIN ZONA EDITABLE ================= */
+const ORD=['cpu','mb','ram','ssd','gpu','psu','cool','case'];
+const GORD=ORD.concat('mon'),MONS=Object.keys(A).filter(i=>A[i][0]=='mon');
+const CN={mon:'Monitores',cpu:'Procesador',mb:'Placa base',ram:'Memoria RAM',ssd:'Disco SSD',gpu:'Tarjeta gráfica',psu:'Fuente',cool:'Refrigeración',case:'Caja'};
+const CK={cpu:'CPU',mb:'Placa',ram:'RAM',ssd:'SSD',gpu:'GPU',psu:'Fuente',cool:'Refrig.',case:'Caja'};
+const EX={cpu:[-.5,.2,0],ram:[-.8,.3,0],ssd:[-.7,-.2,0],gpu:[-1,-.5,0],psu:[-.9,-.2,0],cool:[-1.2,.3,0]};
+let F=[],RB=false;
+const hex=c=>'#'+c.toString(16).padStart(6,'0');
+const M=(c,o)=>new T.MeshStandardMaterial(Object.assign({color:c,metalness:.5,roughness:.45},o));
+const E=(c,i)=>{const m=M(0,{emissive:c,emissiveIntensity:i||1.3});m.userData.gi=i||1.3;return m};
+const G=()=>new T.Group();
+const bx=(w,h,d,m,x,y,z,p)=>{const b=new T.Mesh(new T.BoxGeometry(w,h,d),m);b.position.set(x||0,y||0,z||0);if(p)p.add(b);return b};
+const cy=(r,h,m,x,y,z,p,rz)=>{const b=new T.Mesh(new T.CylinderGeometry(r,r,h,28),m);b.position.set(x||0,y||0,z||0);if(rz)b.rotation.z=PI/2;if(p)p.add(b);return b};
+function tex(s,w,h,fg){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle=fg;x.font='600 '+Math.round(h*.62)+'px system-ui,Arial,sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(s,w/2,h/2,w*.92);const t=new T.CanvasTexture(c);t.encoding=T.sRGBEncoding;t.anisotropy=4;return t}
+const lab=(s,pw,ph,fg,ry)=>{const m=new T.Mesh(new T.PlaneGeometry(pw,ph),new T.MeshBasicMaterial({map:tex(s,512,Math.round(512*ph/pw),fg),transparent:true}));m.rotation.y=ry;return m};
+function meshTex(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.fillStyle='#14161e';x.fillRect(0,0,64,64);x.globalCompositeOperation='destination-out';x.beginPath();[[16,16],[48,16],[16,48],[48,48]].forEach(a=>{x.moveTo(a[0]+9,a[1]);x.arc(a[0],a[1],9,0,7)});x.fill();const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(5,10);t.encoding=T.sRGBEncoding;return t}
+function rainbow(r1,r2){const geo=new T.RingGeometry(r1,r2,48),p=geo.attributes.position,c=[];for(let i=0;i<p.count;i++){const h=(Math.atan2(p.getY(i),p.getX(i))/(2*PI)+1)%1,k=new T.Color().setHSL(h,1,.55);c.push(k.r,k.g,k.b)}geo.setAttribute('color',new T.Float32BufferAttribute(c,3));const m=new T.Mesh(geo,new T.MeshBasicMaterial({vertexColors:true,side:T.DoubleSide,toneMapped:false}));m.userData.rgb=1;return m}
+function fan(s,col){const rb=RB,g=G(),bl=G(),d=M(0x15171f,{roughness:.6});
+bx(s,s*.07,.05,d,0,s*.465,0,g);bx(s,s*.07,.05,d,0,-s*.465,0,g);bx(s*.07,s,.05,d,s*.465,0,0,g);bx(s*.07,s,.05,d,-s*.465,0,0,g);
+cy(s*.13,.07,M(0x262a38),0,0,0,g).rotation.x=PI/2;
+cy(s*.17,.02,M(0x05060a,{metalness:1,roughness:.05}),0,0,.045,g).rotation.x=PI/2;
+for(let i=0;i<4;i++){const rr=new T.Mesh(new T.TorusGeometry(s*.15*(1-i*.2),.005,6,32),E(rb?new T.Color().setHSL(i/4,1,.55).getHex():col,1.8-i*.3));rr.position.z=.058+i*.004;g.add(rr)}
+for(let i=0;i<9;i++){const p=G();p.rotation.z=i*PI*2/9;bx(s*.3,s*.12,.01,M(0x2c3142,{roughness:.4}),s*.27,0,0,p).rotation.x=.6;bl.add(p)}
+g.add(bl);if(rb){const rg=rainbow(s*.37,s*.46);rg.position.z=.03;bl.add(rg)}else g.add(new T.Mesh(new T.TorusGeometry(s*.43,.012,8,40),E(col)));F.push(bl);return g}
+function mkCase(W,H,D,col,mesh){const g=G(),t=.04,d=M(0x1b1e29,{metalness:.7,roughness:.4});
+bx(W,t,D,d,0,t/2,0,g);bx(W,t,D,d,0,H-t/2,0,g);bx(W,H,t,d,0,H/2,-D/2+t/2,g);bx(t,H,D,d,W/2-t/2,H/2,0,g);
+[[-.4,-.4],[.4,-.4],[-.4,.4],[.4,.4]].forEach(a=>cy(.06,.07,M(0xdfe3ea,{metalness:1,roughness:.1}),a[0]*W,-.035,a[1]*D,g));
+const gl=bx(t,H,D,M(0x9db4d6,{transparent:true,opacity:.16,metalness:1,roughness:.04,depthWrite:false}),-W/2+t/2,H/2,0,g);
+const fr=bx(W,H,t,mesh?M(0xffffff,{map:meshTex(),transparent:true,alphaTest:.1,metalness:.5,roughness:.5}):M(0x9db4d6,{transparent:true,opacity:.14,metalness:1,roughness:.04,depthWrite:false}),0,H/2,D/2-t/2,g);
+const bz=D/2+.01;bx(.07,H,.07,d,-W/2+.035,H/2,bz,g);bx(.07,H,.07,d,W/2-.035,H/2,bz,g);bx(W,.07,.07,d,0,H-.035,bz,g);bx(W,.16,.07,d,0,.08,bz,g);
+bx(.03,H*.8,.01,E(col,1.6),-W/2+.08,H/2,D/2+.006,g);
+const wm=new T.Mesh(new T.PlaneGeometry(.5,.1),new T.MeshBasicMaterial({map:tex('R E N D I K',512,100,hex(col)),transparent:true}));wm.position.set(0,.08,D/2+.047);g.add(wm);
+const st=meshTex();st.repeat.set(8,4);bx(W-.1,.025,D*.5,M(0x14161e,{map:st,transparent:true,alphaTest:.1,metalness:.6,roughness:.4}),0,.42,-D/2+t+D*.25,g);
+g.userData={gl:gl,fr:fr};return g}
+function cf(g,W,H,D,n,col,P){const t=.04;for(let i=0;i<n;i++){const f=fan(.48,col);f.position.set(0,H/2+(i-(n-1)/2)*.5,D/2-t-.06);g.add(f);if(P)P.case.push(f)}
+const r=fan(.48,col);r.position.set(.1,H-.4,-D/2+t+.04);g.add(r);if(P)P.case.push(r)}
+function mkMB(bh,bd,col){const g=G(),k=M(0x2a2f3f,{metalness:.8,roughness:.3}),s=M(0x0a0b10);
+bx(.025,bh,bd,M(0x141824,{metalness:.4,roughness:.5}),0,0,0,g);
+bx(.06,.1,bd*.42,k,-.04,bh/2-.1,-bd*.12,g);
+for(let i=0;i<8;i++)bx(.075,.11,.012,k,-.045,bh/2-.1,-bd*.31+i*bd*.054,g);
+bx(.06,.18,.22,k,-.035,-bh*.4,bd*.2,g);bx(.062,.02,.18,E(col,1.2),-.036,-bh*.4,bd*.2,g);
+bx(.015,.28,.28,k,-.012,bh*.17,-bd*.1,g);bx(.03,.04,bd*.55,s,-.03,-bh*.22,-bd*.02,g);
+[0,1].forEach(i=>bx(.03,.5,.04,s,-.02,bh*.17,bd*.27+i*.07,g));
+bx(.01,bh*.9,.01,E(col),-.015,0,bd/2-.02,g);return g}
+function mkCPU(v){const g=G();bx(.03,.3,.3,M(0x0f3d2e,{metalness:.2}),0,0,0,g);bx(.03,.17,.17,M(0xd0d3de,{metalness:1,roughness:.18}),-.03,0,0,g);
+const l=lab(v.l||'CPU',.15,.05,'#1c2030',-PI/2);l.position.x=-.0455;g.add(l);return g}
+function mkRAM(col){const g=G();bx(.03,.52,.045,M(0x1d2a1d,{metalness:.2}),0,0,0,g);bx(.045,.46,.05,M(0x23262f,{metalness:.8,roughness:.3}),-.01,-.02,0,g);bx(.05,.025,.055,E(col,1.6),-.012,.25,0,g);return g}
+function ramSet(n,col){const g=G();for(let i=0;i<n;i++){const r=mkRAM(col);r.position.z=(i-(n-1)/2)*.08;g.add(r)}return g}
+function mkSSD(v){const g=G();bx(.012,.09,.32,M(0x0e5a3c),0,0,0,g);bx(.03,.1,.26,M(0x8a8f9e,{metalness:.9,roughness:.25}),-.02,0,.02,g);
+const l=lab(v.l||'SSD',.22,.06,'#0f1218',-PI/2);l.position.set(-.0365,0,.02);g.add(l);return g}
+function mkGPU(L,col){const g=G(),n=Math.max(2,Math.round(L/.38));
+bx(.4,.24,L,M(0x1a1d27,{roughness:.4}),0,0,0,g);bx(.42,.03,L,M(0x2b3040,{metalness:.9,roughness:.3}),0,.135,0,g);bx(.01,.02,L*.9,E(col,1.5),-.205,.1,0,g);
+for(let i=0;i<n;i++){const f=fan(.24,col);f.rotation.y=-PI/2;f.position.set(-.21,-.01,-L/2+L/(n*2)+i*L/n);g.add(f)}return g}
+function mkPSU(col,v){const g=G();bx(.6,.34,.56,M(0x20232d,{roughness:.5}),0,0,0,g);bx(.012,.26,.4,M(0x111319),-.305,0,0,g);bx(.014,.03,.36,E(col),-.31,.09,0,g);
+const l=lab(v.l||'PSU',.36,.09,'#e8ebf7',-PI/2);l.position.set(-.3125,-.03,0);g.add(l);
+const f=fan(.3,col);f.rotation.x=-PI/2;f.position.set(0,.175,0);g.add(f);return g}
+function mkAir(col,n,f,s){const g=G(),L=n*.036,cu=M(0xb87333,{metalness:1,roughness:.3});bx(.07,.22,.22,cu,0,0,0,g);
+for(let i=0;i<n;i++)bx(.44,s,.012,M(0xc3c9d6,{metalness:.9,roughness:.25}),-.28,0,-L/2+i*.036,g);
+for(let i=-1;i<2;i++)cy(.014,.44,cu,-.25,i*s*.22,0,g,1);
+for(let i=0;i<f;i++){const x=fan(s,col);x.position.set(-.28,0,i?-L/2-.05:L/2+.05);g.add(x)}
+bx(.45,.02,L,E(col,.9),-.28,s/2+.011,0,g);return g}
+function mkAIO(a,r,n,col){const g=G();
+cy(.12,.08,M(0x1b1e29),a.x-.1,a.y,a.z,g,1);cy(.09,.02,E(col),a.x-.15,a.y,a.z,g,1);
+bx(.5,n*.48,.1,M(0x20232d,{metalness:.8}),r.x,r.y,r.z,g);
+for(let i=0;i<n;i++){const f=fan(.46,col);f.position.set(r.x,r.y+(i-(n-1)/2)*.48,r.z-.1);g.add(f)}
+[-1,1].forEach(k=>{const c=new T.CatmullRomCurve3([V3(a.x-.1+k*.04,a.y+.12,a.z),V3(a.x-.08+k*.04,a.y+.38,(a.z+r.z)/2),V3(r.x+k*.14,r.y+n*.24-.08,r.z-.07)]);g.add(new T.Mesh(new T.TubeGeometry(c,24,.025,8),M(0x111319,{roughness:.8,metalness:.1})))});return g}
+function build(c){F=[];RB=c.u=='ga';const pt={};c.p.forEach(id=>{pt[A[id][0]]=A[id]});
+const cv=pt.case[5],kv=pt.cool[5],gv=pt.gpu&&pt.gpu[5],S3=SZ[cv.z],W=S3[0],H=S3[1],D=S3[2],t=.04,g=G(),P={};
+const cs=mkCase(W,H,D,c.col,cv.m);g.add(cs);P.case=[cs];
+const bh=H*.62,bd=D*.6,x0=W/2-t-.07,by=H-.1-bh/2,bz=-D/2+t+.08+bd/2;
+const mb=mkMB(bh,bd,c.col);mb.position.set(x0,by,bz);g.add(mb);P.mb=[mb];
+const put=(o,d,y,z)=>{o.position.set(x0-d,by+y,bz+z);g.add(o);return o};
+P.cpu=[put(mkCPU(pt.cpu[5]),.03,bh*.17,-bd*.1)];
+const nr=pt.ram[5].n||2;P.ram=[];for(let i=0;i<nr;i++)P.ram.push(put(mkRAM(c.col),.04,bh*.17,bd*.27+i*.07));
+P.ssd=[put(mkSSD(pt.ssd[5]),.02,-bh*.07,-bd*.1)];
+if(gv)P.gpu=[put(mkGPU(gv.L,c.col),.24,-bh*.22,-bd/2+.12+gv.L/2)];
+const ps=mkPSU(c.col,pt.psu[5]);ps.position.set(W/2-t-.32,t+.18,-D/2+t+.32);g.add(ps);P.psu=[ps];
+const cab=pts=>{const m=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(p=>V3(p[0],p[1],p[2]))),24,.03,6),M(0x0d0e13,{roughness:.9,metalness:.1}));g.add(m);P.psu.push(m)};
+cab([[ps.position.x-.15,ps.position.y+.17,ps.position.z+.2],[x0-.02,t+.6,bz+bd/2+.08],[x0-.05,by-.05,bz+bd/2-.03]]);
+cab([[ps.position.x+.1,ps.position.y+.17,-D/2+t+.12],[x0-.04,by-.3,-D/2+t+.045],[x0-.04,by+bh/2-.08,-D/2+t+.045],[x0-.05,by+bh/2-.06,bz-bd/2+.35]]);
+const cp=P.cpu[0].position;
+if(kv.aio){const a=mkAIO(V3(cp.x,cp.y,cp.z),V3(0,H/2,D/2-t-.14),kv.f,c.col);g.add(a);P.cool=[a];cf(g,W,H,D,0,c.col,P)}
+else{P.cool=[put(mkAir(c.col,kv.n,kv.f,kv.s),.1,bh*.17,-bd*.1)];cf(g,W,H,D,cv.f,c.col,P)}
+const pl=new T.PointLight(c.col,.8,3);pl.position.set(0,H*.55,.2);g.add(pl);
+if(RB)[[0xff2bd6,.2,.5,.5],[0x20e0ff,-.2,-.3,.7]].forEach(a=>{const l=new T.PointLight(a[0],.9,3);l.position.set(a[1],H*a[3],a[2]);g.add(l)});
+const X=[];Object.keys(EX).forEach(k=>(P[k]||[]).forEach(o=>X.push({o:o,b:o.position.clone(),t:o.position.clone().add(V3(EX[k][0],EX[k][1],EX[k][2]))})));
+g.userData={F:F,P:P,cs:cs,X:X};return g}
+const PB={mon:(v)=>mkMon(v,null,0x5b8cff),cpu:(v)=>mkCPU(v),mb:()=>mkMB(1.1,1.2,0x5b8cff),ram:(v)=>ramSet(v.n||2,v.c),ssd:(v)=>mkSSD(v),gpu:(v)=>mkGPU(v.L,v.c),psu:(v)=>mkPSU(0x5b8cff,v),
+cool:(v)=>v.aio?mkAIO(V3(0,0,0),V3(.1,.2,1.3),v.f,0x5b8cff):mkAir(0x5b8cff,v.n,v.f,v.s),
+case:(v)=>{const z=SZ[v.z],g=mkCase(z[0],z[1],z[2],0x5b8cff,v.m);cf(g,z[0],z[1],z[2],v.f,0x5b8cff);return g}};
+function scrTex(type,col,ar){const w=1024,h=Math.round(1024/ar),cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d'),k=hex(col);
+const R=(a,b,u,v,f)=>{x.fillStyle=f;x.fillRect(a,b,u,v)},L=(a,b,u,v,s)=>{x.strokeStyle=s;x.lineWidth=2;x.beginPath();x.moveTo(a,b);x.lineTo(u,v);x.stroke()},Tx=(s,a,b,f,fg)=>{x.fillStyle=fg;x.font=f;x.fillText(s,a,b)};
+if(type=='of'){R(0,0,w,h,'#f3f5f8');R(0,0,w,h*.08,'#1d7a4a');Tx('Hoja de cálculo · Ventas.xlsx',24,h*.056,'600 '+h*.04+'px sans-serif','#fff');
+for(let i=0;i<13;i++)L(0,h*.16+i*h*.065,w,h*.16+i*h*.065,'#d3d9e3');for(let j=0;j<8;j++)L(70+j*120,h*.12,70+j*120,h,'#d3d9e3');
+for(let i=0;i<10;i++)for(let j=0;j<4;j++)Tx(String(100+((i*37+j*53)%900)),90+j*120,h*.2+i*h*.065,h*.035+'px sans-serif','#334');
+[.3,.5,.4,.7,.6].forEach((v,i)=>R(600+i*70,h*.8-v*h*.5,48,v*h*.5,i%2?'#1d7a4a':'#3b82f6'))}
+else if(type=='ga'){const g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,'#1a0b3d');g.addColorStop(.6,k);g.addColorStop(1,'#080612');x.fillStyle=g;x.fillRect(0,0,w,h);
+x.fillStyle='#ffe6a8';x.beginPath();x.arc(w*.72,h*.34,h*.1,0,7);x.fill();
+x.fillStyle='#0a0716';x.beginPath();x.moveTo(0,h);for(let i=0;i<=16;i++)x.lineTo(i*w/16,h*(.62+.12*Math.sin(i*1.7)+.07*Math.sin(i*4.1)));x.lineTo(w,h);x.fill();
+L(w/2-24,h/2,w/2+24,h/2,'#fff');L(w/2,h/2-24,w/2,h/2+24,'#fff');R(30,h-60,260,18,'#222');R(30,h-60,200,18,'#34d399');Tx('144 FPS',w-190,50,'700 34px monospace','#a3e635')}
+else if(type=='di'){R(0,0,w,h,'#17181d');const g=x.createLinearGradient(0,0,w*.6,h*.6);g.addColorStop(0,'#f97316');g.addColorStop(.5,'#ec4899');g.addColorStop(1,k);x.fillStyle=g;x.fillRect(w*.04,h*.08,w*.58,h*.5);
+R(w*.66,h*.08,w*.3,h*.5,'#22242c');for(let i=0;i<4;i++)R(w*.68,h*.12+i*h*.11,w*.26,h*.07,'#2f323d');
+[['#3b82f6',0,.35],['#22c55e',.38,.3],['#eab308',.7,.25]].forEach(a=>R(w*.04+w*.9*a[1],h*.64,w*.9*a[2],h*.08,a[0]));
+[['#a855f7',.05,.4],['#f43f5e',.5,.4]].forEach(a=>R(w*.04+w*.9*a[1],h*.75,w*.9*a[2],h*.08,a[0]));R(w*.04,h*.87,w*.9,h*.05,'#2a2d37');L(w*.45,h*.6,w*.45,h*.95,'#fff')}
+else if(type=='ar'){R(0,0,w,h,'#23262d');R(0,0,w,h*.06,'#2f333c');R(0,h*.06,w*.05,h,'#2a2d35');for(let i=0;i<6;i++)R(w*.012,h*.1+i*h*.08,w*.026,h*.05,'#454a57');
+for(let i=0;i<=20;i++)L(w*.5,h*.45,w*(i/20)*1.4-w*.2,h,'#353945');for(let j=0;j<6;j++)L(0,h*(.55+j*.08),w,h*(.55+j*.08),'#353945');
+const Bw=(a,b,u,v,d)=>{x.strokeStyle=k;x.lineWidth=3;x.strokeRect(a,b,u,v);x.strokeRect(a+d,b-d,u,v);[[a,b],[a+u,b],[a,b+v],[a+u,b+v]].forEach(p=>L(p[0],p[1],p[0]+d,p[1]-d,k))};
+Bw(w*.3,h*.45,w*.2,h*.3,w*.06);Bw(w*.55,h*.55,w*.14,h*.2,w*.05);Bw(w*.38,h*.28,w*.1,h*.15,w*.04);
+L(w*.1,h*.92,w*.16,h*.92,'#f43f5e');L(w*.1,h*.92,w*.1,h*.84,'#22c55e');L(w*.1,h*.92,w*.13,h*.89,'#3b82f6')}
+else{const g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,'#0b1020');g.addColorStop(1,k);x.fillStyle=g;x.fillRect(0,0,w,h);Tx('RENDIK',w*.36,h*.56,'700 '+h*.1+'px sans-serif','#fff')}
+const t=new T.CanvasTexture(cv);t.encoding=T.sRGBEncoding;t.anisotropy=4;return t}
+function mkMon(v,type,col){const g=G(),ar=v.ar,w=v.d*2.54*ar/Math.sqrt(ar*ar+1)/25,h=w/ar,y0=.53+h/2,dk=M(0x15171d,{metalness:.6,roughness:.4}),sv=M(0x9aa0ad,{metalness:1,roughness:.25}),sd=v.cv?T.BackSide:T.FrontSide;
+const tx=scrTex(type||'x',col,ar),on=new T.MeshBasicMaterial({map:tx,toneMapped:false,side:sd}),off=M(0x04060a,{metalness:.9,roughness:.06,side:sd});let sc;
+if(v.cv){const R=4,tl=w/R,gm=(rr,hh,ex)=>new T.CylinderGeometry(rr,rr,hh,64,1,true,PI-tl/2-ex,tl+2*ex);tx.wrapS=T.RepeatWrapping;tx.repeat.x=-1;tx.offset.x=1;
+sc=new T.Mesh(gm(R,h,0),on);sc.position.set(0,y0,R);g.add(sc);
+const bz=new T.Mesh(gm(R+.004,h+.05,.012),M(0x15171d,{side:T.BackSide}));bz.position.set(0,y0,R);g.add(bz)}
+else{bx(w+.05,h+.05,.07,dk,0,y0,-.035,g);sc=new T.Mesh(new T.PlaneGeometry(w,h),on);sc.position.set(0,y0,.002);g.add(sc)}
+bx(.12,.55,.06,sv,0,.3,-.07,g);bx(.9,.03,.5,sv,0,.015,-.1,g);bx(.03,.012,.012,E(0x22ff88,2),0,y0-h/2-.012,.02,g);
+const l=new T.PointLight(0xbfd4ff,.5,4);l.position.set(0,y0,.9);g.add(l);
+g.userData.scr={m:sc,on:on,off:off};return g}
+function combo(c,mid){const g=G(),pc=build(c),mv=A[mid][5],cs=A[c.p.filter(i=>A[i][0]=='case')[0]][5],W=SZ[cs.z][0],mo=mkMon(mv,c.u,c.col),mw=mv.d*2.54*mv.ar/Math.sqrt(mv.ar*mv.ar+1)/25,kx=(W+.8)/2;
+bx(W+mw+2.4,.1,2.7,M(0x4a3626,{roughness:.55,metalness:.1}),0,-.05,0,g);
+pc.position.set(-(mw+.8)/2,0,-.1);mo.position.set(kx,0,-.55);g.add(pc);g.add(mo);
+bx(1.6,.04,.55,M(0x1a1d26,{roughness:.5}),kx,.02,.6,g);bx(.22,.06,.34,M(0x1a1d26),kx+1.3,.03,.65,g);
+if(c.u=='ga'){bx(3,.012,1.5,M(0x0f1118,{roughness:.9}),kx,.006,.5,g);bx(1.6,.012,.02,E(c.col,1.6),kx,.046,.34,g)}
+g.userData={F:pc.userData.F,scr:mo.userData.scr};return g}
+function power(o,on){o.traverse(m=>{if(m.isLight)m.visible=!!on;if(!m.isMesh)return;if(m.userData.rgb)m.visible=!!on;const mt=m.material;if(mt&&mt.userData&&mt.userData.gi!==undefined)mt.emissiveIntensity=on?mt.userData.gi:0});const s=o.userData.scr;s.m.material=on?s.on:s.off;VC.run=!!on}
+function envTex(r){const s=new T.Scene();s.add(new T.Mesh(new T.SphereGeometry(20,32,16),new T.MeshBasicMaterial({color:0x1a2036,side:T.BackSide})));
+[[0,10,4,8,.2,3,0xffffff,3],[-9,3,0,.3,6,8,0x9bb8ff,2],[9,2,-3,.3,5,6,0xffb1d0,2]].forEach(a=>{const m=new T.Mesh(new T.BoxGeometry(a[3],a[4],a[5]),new T.MeshBasicMaterial({color:new T.Color(a[6]).multiplyScalar(a[7])}));m.position.set(a[0],a[1],a[2]);s.add(m)});
+const p=new T.PMREMGenerator(r),t=p.fromScene(s,.04).texture;p.dispose();return t}
+function blob(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(0,0,0,.7)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128);return new T.CanvasTexture(c)}
+function Viewer(cv){
+const r=new T.WebGLRenderer({canvas:cv,antialias:true,alpha:true});r.outputEncoding=T.sRGBEncoding;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=1.1;r.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+const s=new T.Scene(),cam=new T.PerspectiveCamera(34,1,.1,60);
+s.environment=envTex(r);s.add(new T.HemisphereLight(0xdde6ff,0x1a2038,.5));
+const dl=new T.DirectionalLight(0xffffff,.9);dl.position.set(3,6,4);s.add(dl);
+const bs=new T.Mesh(new T.CylinderGeometry(1,1,.05,64),M(0x151a2a,{metalness:.8,roughness:.3}));bs.position.y=-.025;s.add(bs);
+const rg=new T.Mesh(new T.RingGeometry(.98,1,96),new T.MeshBasicMaterial({color:0x5b8cff,side:T.DoubleSide}));rg.rotation.x=-PI/2;rg.position.y=.003;s.add(rg);
+const bl=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({map:blob(),transparent:true,depthWrite:false}));bl.rotation.x=-PI/2;bl.position.y=.004;s.add(bl);
+const v={th:-.6,ph:1.25,R:6,tt:-.6,tp:1.25,tR:6,baseR:6,lo:2,hi:10,ty:1,auto:true,obj:null,fans:[],parts:[],ex:false};
+let dr=0,lx=0,ly=0,vis=true;
+v.acc=c=>rg.material.color.setHex(c);
+v.show=function(o){if(v.obj)s.remove(v.obj);const b=new T.Box3().setFromObject(o),z=b.getSize(V3(0,0,0)),c=b.getCenter(V3(0,0,0));
+o.position.add(V3(-c.x,.04-b.min.y,-c.z));s.add(o);v.obj=o;v.fans=o.userData.F||[];
+const m=Math.max(z.x,z.y,z.z),k=Math.max(.4,Math.max(z.x,z.z)*.75);bs.scale.set(k,1,k);rg.scale.set(k,1,k);bl.scale.set(Math.max(.6,z.x*1.7),Math.max(.6,z.z*1.7),1);
+v.ty=z.y/2+.04;v.baseR=v.tR=m*2.15+.4;v.lo=m*1.1;v.hi=m*4.5};
+v.go=function(th,ph){v.auto=false;if(v.onauto)v.onauto();v.tt=th+2*PI*Math.round((v.th-th)/(2*PI));v.tp=ph};
+cv.addEventListener('pointerdown',e=>{dr=1;lx=e.clientX;ly=e.clientY;try{cv.setPointerCapture(e.pointerId)}catch(x){}if(v.auto){v.auto=false;if(v.onauto)v.onauto()}if(v.onuse)v.onuse()});
+cv.addEventListener('pointermove',e=>{if(!dr)return;v.tt-=(e.clientX-lx)*.008;v.tp=Math.min(PI-.2,Math.max(.15,v.tp-(e.clientY-ly)*.008));lx=e.clientX;ly=e.clientY});
+['pointerup','pointercancel'].forEach(n=>cv.addEventListener(n,()=>{dr=0}));
+cv.addEventListener('wheel',e=>{e.preventDefault();v.tR=Math.min(v.hi,Math.max(v.lo,v.tR*(1+e.deltaY*.001)))},{passive:false});
+const rs=()=>{const w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()};
+new ResizeObserver(rs).observe(cv);new IntersectionObserver(e=>{vis=e[0].isIntersecting}).observe(cv);
+(function lp(){requestAnimationFrame(lp);if(!vis)return;
+if(v.auto&&!dr)v.tt+=.004;
+v.th+=(v.tt-v.th)*.1;v.ph+=(v.tp-v.ph)*.1;v.R+=(v.tR-v.R)*.1;
+if(v.run!==false)v.fans.forEach(b=>{b.rotation.z+=.09});
+v.parts.forEach(p=>p.o.position.lerp(v.ex?p.t:p.b,.1));
+cam.position.set(v.R*Math.sin(v.ph)*Math.sin(v.th),v.ty+v.R*Math.cos(v.ph),v.R*Math.sin(v.ph)*Math.cos(v.th));cam.lookAt(0,v.ty,0);r.render(s,cam)})();
+return v}
+/* ================= Interfaz ================= */
+const fmt=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),sum=c=>c.p.reduce((a,id)=>a+A[id][2],0);
+const S={u:'*',b:'*',c:null,pc:null,ins:0,ex:0,pw:1,mon:null,co:null};
+let V,V2,VC;
+try{V=Viewer(q('#rk-c1'));V2=Viewer(q('#rk-c2'));VC=Viewer(q('#rk-c3'))}catch(e){root.insertAdjacentHTML('beforeend','<p class="sub">Tu navegador no admite gráficos 3D (WebGL).</p>');return}
+V.onuse=()=>{q('#rk-h').style.opacity=0};
+q('#rk-u').innerHTML='<option value="*">Todos los usos</option>'+Object.keys(U).map(k=>'<option value="'+k+'">'+U[k]+'</option>').join('');
+q('#rk-b').innerHTML='<option value="*">Cualquier presupuesto</option>'+B.map((b,i)=>'<option value="'+i+'">'+b+'</option>').join('');
+q('#rk-u').onchange=e=>{S.u=e.target.value;list()};q('#rk-b').onchange=e=>{S.b=e.target.value;list()};
+function mark(){q('#rk-m').querySelectorAll('button').forEach(b=>b.classList.toggle('on',!!S.c&&b.dataset.i==S.c.id))}
+function list(){const a=C.filter(c=>(S.u=='*'||c.u==S.u)&&(S.b=='*'||String(c.b)==S.b)),e=q('#rk-m');
+q('#rk-n').textContent=a.length+(a.length==1?' modelo':' modelos');
+if(!a.length){e.innerHTML='<p class="sub" style="margin:0">Todavía no tenemos un modelo de serie con esa combinación, pero lo montamos a tu medida. <a href="'+CONTACT+'">Cuéntanos qué necesitas</a>.</p>';return}
+e.innerHTML=a.map(c=>'<button data-i="'+c.id+'">'+c.n+' · '+fmt(sum(c))+' €</button>').join('');
+e.querySelectorAll('button').forEach(b=>{b.onclick=()=>pick(b.dataset.i)});
+if(a.indexOf(S.c)<0)pick(a[0].id);else mark()}
+function vis(){if(!S.pc)return;const u=S.pc.userData.cs.userData,h=S.ins||S.ex;u.gl.visible=!h;u.fr.visible=!h;
+q('#rk-in').classList.toggle('on',!!S.ins);q('#rk-ex').classList.toggle('on',!!S.ex)}
+function flash(k){const a=S.pc.userData.P[k]||[],f=on=>a.forEach(o=>o.traverse(m=>{if(!m.isMesh||!m.material.emissive)return;const e=m.material.emissive;
+if(on&&m.userData.h===undefined){m.userData.h=e.getHex();e.setHex(0x2244ff)}else if(!on&&m.userData.h!==undefined){e.setHex(m.userData.h);delete m.userData.h}}));
+if(S.off)S.off();f(1);S.off=()=>f(0);clearTimeout(S.t);S.t=setTimeout(S.off,1500)}
+function info(c){const ids=c.p.slice().sort((x,y)=>ORD.indexOf(A[x][0])-ORD.indexOf(A[y][0]));
+q('#rk-i').innerHTML='<span class="tg">'+U[c.u]+' · '+B[c.b]+'</span><h3>'+c.n+'</h3><div class="pr"><b>'+fmt(sum(c))+' €</b><span>Montado, probado y listo para conectar</span></div><p class="id">'+c.ideal+'</p>'+
+ids.map(id=>{const a=A[id];return '<div class="r" data-k="'+a[0]+'"><div class="rh"><span class="k">'+CK[a[0]]+'</span><span class="rn">'+a[1]+'</span><span class="rp">'+(a[2]?fmt(a[2])+' €':'Incluido')+'</span></div><div class="rb"><p><b>En sencillo</b>'+a[4]+'</p><p class="t"><b>Ficha técnica</b>'+a[3]+'</p></div></div>'}).join('');
+const rows=q('#rk-i').querySelectorAll('.r');
+rows.forEach(r=>{r.querySelector('.rh').onclick=()=>{const o=r.classList.contains('o');rows.forEach(x=>x.classList.remove('o'));if(!o)r.classList.add('o');flash(r.dataset.k)}});
+rows[0].classList.add('o')}
+function pick(id){const c=S.c=C.filter(x=>x.id==id)[0];S.pc=build(c);V.show(S.pc);V.parts=S.pc.userData.X;V.ex=!!S.ex;if(S.ex)V.tR=V.baseR*1.35;V.acc(c.col);root.style.setProperty('--a',hex(c.col));vis();info(c);mark();showCombo(true)}
+const views=[['Frontal',0,1.4],['Lateral',-PI/2,1.4],['Trasera',PI,1.4],['Arriba',-.6,.2],['3/4',-.6,1.25]];
+q('#rk-v').innerHTML=views.map((v,i)=>'<button data-i="'+i+'">'+v[0]+'</button>').join('');
+q('#rk-v').querySelectorAll('button').forEach(b=>{b.onclick=()=>{const v=views[b.dataset.i];V.go(v[1],v[2])}});
+q('#rk-t').innerHTML='<button id="rk-in">Ver interior</button><button id="rk-ex">Despiece</button><button id="rk-au" class="on">Giro</button>';
+q('#rk-in').onclick=()=>{S.ins=S.ins?0:1;vis()};
+q('#rk-ex').onclick=()=>{S.ex=S.ex?0:1;V.ex=!!S.ex;V.tR=V.baseR*(S.ex?1.35:1);vis()};
+q('#rk-au').onclick=()=>{V.auto=!V.auto;q('#rk-au').classList.toggle('on',V.auto)};
+V.onauto=()=>q('#rk-au').classList.remove('on');
+function showCombo(reset){const c=S.c;if(!c)return;if(reset||!S.mon)S.mon=MON[c.id];const o=combo(c,S.mon);VC.show(o);VC.acc(c.col);S.co=o;power(o,S.pw);cinfo()}
+function cinfo(){const c=S.c,m=A[S.mon];
+q('#rk-ci').innerHTML='<span class="tg">Equipo completo</span><h3>'+c.n+' + monitor</h3><div class="pr"><b>'+fmt(sum(c)+m[2])+' €</b><span>PC '+fmt(sum(c))+' € + monitor '+fmt(m[2])+' €</span></div><p class="id">Hemos elegido el monitor recomendado para este uso. Cámbialo si prefieres otro.</p><div class="pills wr" id="rk-mp">'+MONS.map(i=>'<button data-i="'+i+'">'+A[i][1]+(i==MON[c.id]?'<em class="bd">Recomendado</em>':'')+'</button>').join('')+'</div><div class="gd"><p><b>En sencillo</b>'+m[4]+'</p><p class="t"><b>Ficha técnica</b>'+m[3]+'</p></div>';
+q('#rk-mp').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.i==S.mon);b.onclick=()=>{S.mon=b.dataset.i;showCombo(false)}})}
+q('#rk-pw').querySelectorAll('button').forEach(b=>{b.onclick=()=>{S.pw=+b.dataset.p;q('#rk-pw').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x==b));if(S.co)power(S.co,S.pw)}});
+q('#rk-v3').innerHTML=views.map((v,i)=>'<button data-i="'+i+'">'+v[0]+'</button>').join('');
+q('#rk-v3').querySelectorAll('button').forEach(b=>{b.onclick=()=>{const v=views[b.dataset.i];VC.go(v[1],v[2])}});
+/* Galería de piezas */
+function gal(id){const a=A[id],v=a[5];F=[];RB=true;const o=PB[a[0]](v);o.userData.F=F;V2.show(o);V2.acc(v.c||0x5b8cff);
+q('#rk-gp').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.i==id));
+q('#rk-gi').innerHTML='<span class="tg">'+CN[a[0]]+'</span><h3>'+a[1]+'</h3><div class="pr"><b>'+(a[2]?fmt(a[2])+' €':'Incluido')+'</b><span>precio orientativo</span></div><div class="gd"><p><b>En sencillo</b>'+a[4]+'</p><p class="t"><b>Ficha técnica</b>'+a[3]+'</p></div>'}
+function gcat(k){q('#rk-gc').innerHTML=GORD.map(x=>'<button data-k="'+x+'"'+(x==k?' class="on"':'')+'>'+CN[x]+'</button>').join('');
+q('#rk-gc').querySelectorAll('button').forEach(b=>{b.onclick=()=>gcat(b.dataset.k)});
+const ids=Object.keys(A).filter(i=>A[i][0]==k);
+q('#rk-gp').innerHTML=ids.map(i=>'<button data-i="'+i+'">'+A[i][1]+'</button>').join('');
+q('#rk-gp').querySelectorAll('button').forEach(b=>{b.onclick=()=>gal(b.dataset.i)});gal(ids[0])}
+list();gcat('cpu');VC.go(-.35,1.4);
+})();
+</script>
 </body>
 </html>
